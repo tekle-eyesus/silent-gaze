@@ -6,11 +6,21 @@ const socketHandler = (io) => {
 
         // --- ROOM MANAGEMENT ---
         socket.on('join_room', (roomId) => {
+            const room = io.sockets.adapter.rooms.get(roomId);
+            const size = room ? room.size : 0;
+
+            if (size >= 2) {
+                socket.emit('room_full');
+                return;
+            }
+
             socket.join(roomId);
             console.log(`User ${socket.id} joined room: ${roomId}`);
 
-            // Notify others in the room (Essential for triggering WebRTC offer)
-            socket.to(roomId).emit('user_joined', socket.id);
+            // If there is already someone there, tell them a partner joined
+            if (size === 1) {
+                socket.to(roomId).emit('user_joined', socket.id); // Triggers WebRTC
+            }
         });
 
         // --- CHAT MESSAGING ---
