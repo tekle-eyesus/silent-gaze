@@ -1,29 +1,39 @@
 const Message = require('../models/Message');
 
-const getRoomMessages = async (req, res) => {
+// Get history
+const getMessages = async (req, res) => {
     try {
         const { roomId } = req.params;
-
-        const messages = await Message.find({ roomId }).sort({ createdAt: 1 }).limit(50);
+        const messages = await Message.find({ roomId }).sort({ createdAt: 1 });
         res.status(200).json(messages);
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        res.status(500).json(error);
     }
 };
 
-
-const saveMessage = async (data) => {
+// Save new message
+const sendMessage = async (req, res) => {
     try {
-        const newMessage = await Message.create({
+        const { roomId, senderId, text } = req.body;
+        const newMessage = await Message.create({ roomId, senderId, text });
+        res.status(201).json(newMessage);
+    } catch (error) {
+        res.status(500).json(error);
+    }
+};
+
+// Helper for Socket.io (Internal use)
+const saveMessageInternal = async (data) => {
+    try {
+        return await Message.create({
             roomId: data.roomId,
             senderId: data.senderId,
-            text: data.text,
+            text: data.text
         });
-        return newMessage;
     } catch (error) {
-        console.error("Error saving message:", error);
+        console.error(error);
         return null;
     }
 };
 
-module.exports = { getRoomMessages, saveMessage };
+module.exports = { getMessages, sendMessage, saveMessageInternal };

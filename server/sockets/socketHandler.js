@@ -1,54 +1,32 @@
-const { saveMessage } = require('../controllers/chatController');
+const { saveMessageInternal } = require('../controllers/chatController');
 
-const socketHandler = (io) => {
+module.exports = (io) => {
     io.on('connection', (socket) => {
-        console.log(`User Connected: ${socket.id}`);
 
-        // --- ROOM MANAGEMENT ---
+        // Join Room
         socket.on('join_room', (roomId) => {
-            const room = io.sockets.adapter.rooms.get(roomId);
-            const size = room ? room.size : 0;
-
-            if (size >= 2) {
-                socket.emit('room_full');
-                return;
-            }
-
             socket.join(roomId);
-            console.log(`User ${socket.id} joined room: ${roomId}`);
+            socket.to(roomId).emit('user_joined', socket.id);
+        });
 
-            // If there is already someone there, tell them a partner joined
-            if (size === 1) {
-                socket.to(roomId).emit('user_joined', socket.id); // Triggers WebRTC
+        // Chat Logic
+        socket.on('send_message', async (data) => {
+            // 1. Save to DB first
+            const savedMsg = await saveMessageInternal(data);
+
+            // 2. Broadcast to everyone in room (including sender, for confirmation)
+            if (savedMsg) {
+                io.to(data.roomId).emit('receive_message', savedMsg);
             }
         });
 
-        // --- CHAT MESSAGING ---
-        socket.on('send_message', async (data) => {
-            await saveMessage(data);
+        // WebRTC Signaling
+        socket.on('offer', (payload) => io.to(payload.target).emit('offer', payload));
+        socket.on('answer', (payload) => io.to(payload.target).emit('answer', payload));
+        socket.on('ice-candidate', (incoming) => io.to(incoming.target).emit('ice-candidate', incoming.candidate));
 
-            socket.to(data.roomId).emit('receive_message', data);
-        });
-
-
-        socket.on('offer', (payload) => {
-            // payload: { target: 'socketId-to-send-to', caller: 'my-socket-id', sdp: '...' }
-            io.to(payload.target).emit('offer', payload);
-        });
-
-        socket.on('answer', (payload) => {
-            io.to(payload.target).emit('answer', payload);
-        });
-
-        socket.on('ice-candidate', (incoming) => {
-            io.to(incoming.target).emit('ice-candidate', incoming.candidate);
-        });
-
-        // ---  CLEANUP ---
         socket.on('disconnect', () => {
-            console.log('User Disconnected', socket.id);
+            // Optional cleanup
         });
     });
 };
-
-module.exports = socketHandler;
