@@ -4,9 +4,12 @@ import io from 'socket.io-client';
 import Peer from 'simple-peer';
 import { motion, AnimatePresence } from 'framer-motion';
 import { IoSend, IoExitOutline } from 'react-icons/io5';
+import { MdEmojiEmotions } from 'react-icons/md';
 import { getMessages } from '../api';
 
 const socket = io("http://localhost:3001", { autoConnect: false });
+
+const EMOJI_LIST = ['❤️', '😂', '🔥', '👍', '😮', '🎉', '👻', '😢', '😡', '👀'];
 
 const Room = () => {
   const { roomId } = useParams();
@@ -17,6 +20,8 @@ const Room = () => {
   const [input, setInput] = useState("");
   const [status, setStatus] = useState("Waiting...");
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
   const [myUserId] = useState(() => {
     const stored = sessionStorage.getItem('u_id');
@@ -109,17 +114,24 @@ const Room = () => {
       };
   }, []);
 
-  const sendMessage = () => {
-      if (!input.trim()) return;
+  // --- UPDATED SEND FUNCTION ---
+  const sendMessage = (text = input, type = 'text') => { 
+      if (!text.trim()) return;
 
       const msgData = { 
           roomId, 
-          text: input, 
-          senderId: myUserId 
+          text: text, 
+          senderId: myUserId,
+          type: type // Send type
       };
 
       socket.emit('send_message', msgData);
-      setInput("");
+      
+      // Clear input only if it was text
+      if (type === 'text') setInput("");
+      
+      // Close picker if emoji
+      if (type === 'emoji') setShowEmojiPicker(false);
   };
 
   const isMine = (msg) => msg.senderId === myUserId;
@@ -128,7 +140,37 @@ const Room = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  return (
+
+   const renderMessage = (msg) => {
+      // TELEGRAM STYLE ANIMATED EMOJI
+      if (msg.type === 'emoji') {
+          return (
+             <motion.div 
+                initial={{ scale: 0, rotate: -45 }}
+                animate={{ scale: 1, rotate: 0 }}
+                transition={{ type: "spring", stiffness: 200, damping: 10 }}
+                className="text-6xl drop-shadow-lg filter"
+             >
+                 {msg.text}
+             </motion.div>
+          );
+      }
+
+      // STANDARD TEXT BUBBLE
+      return (
+        <div className={`
+            px-5 py-3 text-base shadow-lg max-w-[85%]
+            ${!isMine(msg) 
+                ? 'glass-bubble bg-white/10 backdrop-blur-md border border-white/10 rounded-r-2xl rounded-tl-2xl text-white' 
+                : 'text-white/80 text-right bg-black/40 rounded-lg backdrop-blur-sm'
+            }
+        `}>
+            {msg.text}
+        </div>
+      );
+  };
+
+ return (
     <div className="h-screen w-screen relative bg-black overflow-hidden flex flex-col">
       {/* BACKGROUND VIDEO */}
       <div className="absolute inset-0 z-0">
@@ -144,36 +186,92 @@ const Room = () => {
           <button onClick={() => { socket.disconnect(); navigate('/'); }} className="text-white/50 hover:text-red-400"><IoExitOutline size={24} /></button>
       </div>
 
-      {/* CHAT LAYOUT */}
+      {/* CHAT AREA */}
       <div className={`relative z-10 w-full h-full pointer-events-none p-4 ${isMobile ? 'flex flex-col' : 'grid grid-cols-2 gap-8'}`}>
         
-        {/* LEFT: PARTNER */}
+        {/* PARTNER MESSAGES (LEFT) */}
         <div className={`flex flex-col justify-end items-start space-y-4 ${isMobile ? 'flex-1 mb-20' : 'pb-10'}`}>
             <AnimatePresence>
             {messages.filter(m => !isMine(m)).slice(-5).map((msg, i) => (
-                <motion.div initial={{ opacity: 0, x: -20, filter: 'blur(10px)' }} animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }} key={i} className="glass-bubble bg-white/10 backdrop-blur-md border border-white/10 px-5 py-3 rounded-r-2xl rounded-tl-2xl text-white text-base shadow-lg max-w-[85%]">
-                    {msg.text}
+                <motion.div 
+                    initial={{ opacity: 0, x: -20, filter: 'blur(10px)' }} 
+                    animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }} 
+                    key={i} 
+                >
+                    {renderMessage(msg)}
                 </motion.div>
             ))}
             </AnimatePresence>
         </div>
 
-        {/* RIGHT: ME */}
+        {/* MY MESSAGES (RIGHT) */}
         <div className={`flex flex-col justify-end items-end space-y-4 ${isMobile ? 'absolute bottom-4 left-0 w-full px-4' : 'pb-10'}`}>
-            <div className="flex flex-col space-y-2 items-end opacity-70 w-full">
+            <div className="flex flex-col space-y-2 items-end opacity-70 w-full pointer-events-none">
                 {messages.filter(m => isMine(m)).slice(-3).map((msg, i) => (
-                    <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} key={i} className="text-white/80 text-right text-sm bg-black/40 px-3 py-1 rounded-lg backdrop-blur-sm">
-                        {msg.text}
+                    <motion.div 
+                        initial={{ opacity: 0, x: 20 }} 
+                        animate={{ opacity: 1, x: 0 }} 
+                        key={i}
+                    >
+                        {renderMessage(msg)}
                     </motion.div>
                 ))}
             </div>
             <div ref={messagesEndRef} />
             
-            <div className="pointer-events-auto w-full max-w-sm relative">
-                <input type="text" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && sendMessage()} placeholder="Whisper..." className="w-full bg-black/50 backdrop-blur-xl border border-white/20 text-white px-5 py-3 rounded-full outline-none focus:border-white/60 transition-all pr-12 shadow-2xl" />
-                <button onClick={sendMessage} className="absolute right-2 top-1.5 p-2 bg-white/10 rounded-full hover:bg-white/20 text-white"><IoSend size={16} /></button>
+            {/* INPUT BAR CONTAINER */}
+            <div className="pointer-events-auto w-full max-w-sm relative flex items-center gap-2">
+                
+                {/* <--- NEW: EMOJI PICKER POPUP ---> */}
+                <AnimatePresence>
+                {showEmojiPicker && (
+                    <motion.div 
+                        initial={{ opacity: 0, y: 20, scale: 0.9 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 20, scale: 0.9 }}
+                        className="absolute bottom-16 left-0 bg-black/80 backdrop-blur-xl border border-white/20 rounded-2xl p-4 grid grid-cols-5 gap-2 shadow-2xl z-50 w-full"
+                    >
+                        {EMOJI_LIST.map((emoji) => (
+                            <button 
+                                key={emoji}
+                                onClick={() => sendMessage(emoji, 'emoji')}
+                                className="text-3xl hover:scale-125 transition-transform p-2"
+                            >
+                                {emoji}
+                            </button>
+                        ))}
+                    </motion.div>
+                )}
+                </AnimatePresence>
+
+                {/* <--- NEW: EMOJI TOGGLE BUTTON ---> */}
+                <button 
+                    onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                    className={`p-3 rounded-full transition-colors ${showEmojiPicker ? 'bg-white text-black' : 'bg-black/50 text-white hover:bg-white/20'}`}
+                >
+                    <MdEmojiEmotions size={22} />
+                </button>
+
+                {/* TEXT INPUT */}
+                <div className="relative flex-1">
+                    <input 
+                        type="text" 
+                        value={input} 
+                        onChange={(e) => setInput(e.target.value)} 
+                        onKeyDown={(e) => e.key === 'Enter' && sendMessage(input, 'text')} 
+                        placeholder="Whisper..." 
+                        className="w-full bg-black/50 backdrop-blur-xl border border-white/20 text-white px-5 py-3 rounded-full outline-none focus:border-white/60 transition-all pr-12 shadow-2xl" 
+                    />
+                    <button 
+                        onClick={() => sendMessage(input, 'text')} 
+                        className="absolute right-2 top-1.5 p-2 bg-white/10 rounded-full hover:bg-white/20 text-white"
+                    >
+                        <IoSend size={16} />
+                    </button>
+                </div>
             </div>
 
+            {/* MY VIDEO */}
             {!isMobile && (
                 <div className="w-48 h-32 rounded-xl overflow-hidden border border-white/20 shadow-2xl bg-black/50 backdrop-blur-sm mt-4 pointer-events-auto">
                     <video ref={myVideo} autoPlay playsInline muted className="w-full h-full object-cover transform scale-x-[-1]" />
