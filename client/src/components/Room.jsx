@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import io from 'socket.io-client';
 import Peer from 'simple-peer';
@@ -10,16 +10,11 @@ import { getMessages } from '../api';
 const socket = io("http://localhost:3001", { autoConnect: false });
 
 const EMOJI_LIST = [
-    // Love & Positive
     '❤️', '💖', '😍', '😘', '🥰', '🔥', '✨', '🎉',
-    // Happy & Funny
     '😂', '🤣', '😊', '😁', '😎', '😜', '👻', '💩',
-    // Reactions
     '👍', '👎', '👏', '🙌', '😮', '😲', '🤔', '👀',
-    // Sad & Angry
     '😢', '😭', '🥺', '😤', '😡', '🤬', '💔', '🙏'
 ];
-
 
 const Room = () => {
   const { roomId } = useParams();
@@ -30,9 +25,10 @@ const Room = () => {
   const [input, setInput] = useState("");
   const [status, setStatus] = useState("Waiting...");
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
- const [floatingParticles, setFloatingParticles] = useState([]);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [floatingParticles, setFloatingParticles] = useState([]);
 
+  // User Identity
   const [myUserId] = useState(() => {
     const stored = sessionStorage.getItem('u_id');
     if (stored) return stored;
@@ -41,110 +37,88 @@ const Room = () => {
     return newId;
   });
 
-  // Refs
   const myVideo = useRef();
   const userVideo = useRef();
   const connectionRef = useRef();
   const messagesEndRef = useRef(null);
 
-
-   const triggerFloatingParticles = (emoji) => {
+  // --- 1. STABLE PARTICLE GENERATOR (FIXED) ---
+  // We use useCallback so this function reference stays stable across renders
+  const triggerFloatingParticles = useCallback((emoji) => {
       const newParticles = [];
-      // Generate 15 particles per click
       for (let i = 0; i < 15; i++) {
           newParticles.push({
-              id: Math.random(), // Unique ID for animation key
+              id: Math.random(),
               emoji: emoji,
-              x: Math.random() * 100, // Random Horizontal Position (0-100%)
-              delay: Math.random() * 0.5, // Random start time
-              duration: 2 + Math.random() * 2, // Random speed (2s to 4s)
-              size: 20 + Math.random() * 40 // Random size (20px to 60px)
+              x: Math.random() * 100, 
+              delay: Math.random() * 0.5,
+              duration: 2 + Math.random() * 2,
+              size: 20 + Math.random() * 40
           });
       }
 
       setFloatingParticles((prev) => [...prev, ...newParticles]);
 
-      // Cleanup these specific particles after 4 seconds to keep DOM light
       setTimeout(() => {
           setFloatingParticles((prev) => prev.filter(p => !newParticles.includes(p)));
       }, 4000);
-  };
+  }, []);
 
-  // --- 1. SETUP & CHAT HISTORY ---
-  useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth < 768);
-    window.addEventListener('resize', handleResize);
-
-    // Fetch old messages from Database
-    getMessages(roomId).then(data => {
-        if(Array.isArray(data)) setMessages(data);
-    });
-
-    return () => window.removeEventListener('resize', handleResize);
-  }, [roomId]);
-
-  // SOCKET CONNECTION & LIVE CHAT ---
+  // --- 2. SOCKET LISTENER (FIXED) ---
   useEffect(() => {
     if (!socket.connected) socket.connect();
     socket.emit('join_room', roomId);
-
-    // Clear old listeners to prevent duplicates
+    
     socket.off('receive_message');
-
-    // Listen for new messages
+    
     socket.on('receive_message', (newMsg) => {
+        console.log("📨 Message Received:", newMsg);
+
         setMessages((prev) => {
             if (prev.some(m => m._id === newMsg._id)) return prev;
             return [...prev, newMsg];
         });
+
+        // TRIGGER ANIMATION FOR RECEIVER
+        // We check if (senderId !== myUserId) so we don't double-animate for the sender
+        if (newMsg.type === 'emoji' && newMsg.senderId !== myUserId) {
+            triggerFloatingParticles(newMsg.text);
+        }
     });
 
-    return () => {
-        socket.off('receive_message');
-    };
+    return () => socket.off('receive_message');
+  }, [roomId, myUserId, triggerFloatingParticles]); // Added triggerFloatingParticles to dependencies
+
+  // --- STANDARD LOGIC (Unchanged) ---
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    getMessages(roomId).then(data => { if(Array.isArray(data)) setMessages(data); });
+    return () => window.removeEventListener('resize', handleResize);
   }, [roomId]);
 
-  // VIDEO / WEBRTC
   useEffect(() => {
-    navigator.mediaDevices.getUserMedia({ video: true, audio: false })
-      .then((stream) => {
+    navigator.mediaDevices.getUserMedia({ video: true, audio: false }).then((stream) => {
         if (myVideo.current) myVideo.current.srcObject = stream;
-
-        socket.off('user_joined');
-        socket.off('offer');
-        socket.off('answer');
-
-        // Host
+        socket.off('user_joined'); socket.off('offer'); socket.off('answer');
+        
         socket.on('user_joined', (userId) => {
-          setStatus("Connecting...");
           const peer = new Peer({ initiator: true, trickle: false, stream });
           peer.on('signal', data => socket.emit('offer', { target: userId, caller: socket.id, sdp: data }));
-          peer.on('stream', userStream => {
-             if (userVideo.current) userVideo.current.srcObject = userStream;
-             setStatus("Connected");
-          });
+          peer.on('stream', userStream => { if (userVideo.current) userVideo.current.srcObject = userStream; setStatus("Connected"); });
           socket.on('answer', payload => peer.signal(payload.sdp));
           connectionRef.current = peer;
         });
 
-        // Guest
         socket.on('offer', (payload) => {
-          setStatus("Connecting...");
           const peer = new Peer({ initiator: false, trickle: false, stream });
           peer.on('signal', data => socket.emit('answer', { target: payload.caller, sdp: data }));
-          peer.on('stream', userStream => {
-             if (userVideo.current) userVideo.current.srcObject = userStream;
-             setStatus("Connected");
-          });
+          peer.on('stream', userStream => { if (userVideo.current) userVideo.current.srcObject = userStream; setStatus("Connected"); });
           peer.signal(payload.sdp);
           connectionRef.current = peer;
         });
-      })
-      .catch(err => console.error("Camera Error", err));
-
-      return () => {
-          if (connectionRef.current) connectionRef.current.destroy();
-      };
+    }).catch(err => console.error(err));
+    return () => { if (connectionRef.current) connectionRef.current.destroy(); };
   }, []);
 
   const sendMessage = (text = input, type = 'text') => { 
@@ -154,7 +128,7 @@ const Room = () => {
 
       socket.emit('send_message', msgData);
       
-      // TRIGGER ANIMATION LOCALLY
+      // TRIGGER ANIMATION LOCALLY (Instant Feedback)
       if (type === 'emoji') {
           triggerFloatingParticles(text);
           setShowEmojiPicker(false);
@@ -169,8 +143,7 @@ const Room = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-
-   const renderMessage = (msg) => {
+  const renderMessage = (msg) => {
       if (msg.type === 'emoji') {
           return (
              <motion.div 
@@ -189,10 +162,10 @@ const Room = () => {
       );
   };
 
- return (
+  return (
     <div className="h-screen w-screen relative bg-black overflow-hidden flex flex-col">
       
-      {/* --- 3. FLOATING PARTICLE LAYER --- */}
+      {/* FLOATING PARTICLES */}
       <div className="absolute inset-0 pointer-events-none z-50 overflow-hidden">
           <AnimatePresence>
             {floatingParticles.map((particle) => (
@@ -201,16 +174,9 @@ const Room = () => {
                     initial={{ y: '110vh', x: `${particle.x}vw`, opacity: 0, scale: 0 }}
                     animate={{ y: '-10vh', opacity: [0, 1, 1, 0], scale: 1 }}
                     exit={{ opacity: 0 }}
-                    transition={{ 
-                        duration: particle.duration, 
-                        ease: "easeOut", 
-                        delay: particle.delay 
-                    }}
+                    transition={{ duration: particle.duration, ease: "easeOut", delay: particle.delay }}
                     className="absolute text-4xl"
-                    style={{ 
-                        fontSize: `${particle.size}px`,
-                        left: 0 // Position controlled by x in initial/animate
-                    }}
+                    style={{ fontSize: `${particle.size}px`, left: 0 }}
                 >
                     {particle.emoji}
                 </motion.div>
@@ -232,10 +198,8 @@ const Room = () => {
           <button onClick={() => { socket.disconnect(); navigate('/'); }} className="text-white/50 hover:text-red-400"><IoExitOutline size={24} /></button>
       </div>
 
-      {/* CHAT AREA */}
+      {/* CHAT UI */}
       <div className={`relative z-10 w-full h-full pointer-events-none p-4 ${isMobile ? 'flex flex-col' : 'grid grid-cols-2 gap-8'}`}>
-        
-        {/* LEFT MSG */}
         <div className={`flex flex-col justify-end items-start space-y-4 ${isMobile ? 'flex-1 mb-20' : 'pb-10'}`}>
             <AnimatePresence>
             {messages.filter(m => !isMine(m)).slice(-5).map((msg, i) => (
@@ -246,7 +210,6 @@ const Room = () => {
             </AnimatePresence>
         </div>
 
-        {/* RIGHT MSG */}
         <div className={`flex flex-col justify-end items-end space-y-4 ${isMobile ? 'absolute bottom-4 left-0 w-full px-4' : 'pb-10'}`}>
             <div className="flex flex-col space-y-2 items-end opacity-70 w-full pointer-events-none">
                 {messages.filter(m => isMine(m)).slice(-3).map((msg, i) => (
@@ -257,27 +220,16 @@ const Room = () => {
             </div>
             <div ref={messagesEndRef} />
             
-            {/* INPUT + EMOJI */}
             <div className="pointer-events-auto w-full max-w-sm relative flex items-center gap-2">
-                
-                {/* --- 4. SCROLLABLE EMOJI PICKER --- */}
                 <AnimatePresence>
                 {showEmojiPicker && (
                     <motion.div 
-                        initial={{ opacity: 0, y: 20, scale: 0.9 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 20, scale: 0.9 }}
+                        initial={{ opacity: 0, y: 20, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 20, scale: 0.9 }}
                         className="absolute bottom-16 left-0 bg-black/80 backdrop-blur-xl border border-white/20 rounded-2xl p-4 shadow-2xl z-50 w-full"
                     >
                         <div className="grid grid-cols-6 gap-2 max-h-60 overflow-y-auto custom-scrollbar">
                             {EMOJI_LIST.map((emoji) => (
-                                <button 
-                                    key={emoji}
-                                    onClick={() => sendMessage(emoji, 'emoji')}
-                                    className="text-2xl hover:scale-125 transition-transform p-2"
-                                >
-                                    {emoji}
-                                </button>
+                                <button key={emoji} onClick={() => sendMessage(emoji, 'emoji')} className="text-2xl hover:scale-125 transition-transform p-2">{emoji}</button>
                             ))}
                         </div>
                     </motion.div>
