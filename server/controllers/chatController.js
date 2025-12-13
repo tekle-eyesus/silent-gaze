@@ -11,29 +11,29 @@ const getMessages = async (req, res) => {
     }
 };
 
-// Save new message
-const sendMessage = async (req, res) => {
-    try {
-        const { roomId, senderId, text } = req.body;
-        const newMessage = await Message.create({ roomId, senderId, text });
-        res.status(201).json(newMessage);
-    } catch (error) {
-        res.status(500).json(error);
-    }
-};
-
-// Helper for Socket.io (Internal use)
 const saveMessageInternal = async (data) => {
     try {
         return await Message.create({
             roomId: data.roomId,
             senderId: data.senderId,
-            text: data.text
+            text: data.text,
+            type: data.type || 'text'
         });
     } catch (error) {
         console.error(error);
         return null;
     }
 };
+
+const sendMessage = async (req, res) => {
+    try {
+        const { roomId, senderId, text, type } = req.body;
+        const newMessage = await Message.create({ roomId, senderId, text, type: type || 'text' });
+        res.status(201).json(newMessage);
+    } catch (error) {
+        res.status(500).json(error);
+    }
+};
+
 
 module.exports = { getMessages, sendMessage, saveMessageInternal };
