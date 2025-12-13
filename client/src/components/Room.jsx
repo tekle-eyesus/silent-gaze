@@ -9,7 +9,17 @@ import { getMessages } from '../api';
 
 const socket = io("http://localhost:3001", { autoConnect: false });
 
-const EMOJI_LIST = ['❤️', '😂', '🔥', '👍', '😮', '🎉', '👻', '😢', '😡', '👀'];
+const EMOJI_LIST = [
+    // Love & Positive
+    '❤️', '💖', '😍', '😘', '🥰', '🔥', '✨', '🎉',
+    // Happy & Funny
+    '😂', '🤣', '😊', '😁', '😎', '😜', '👻', '💩',
+    // Reactions
+    '👍', '👎', '👏', '🙌', '😮', '😲', '🤔', '👀',
+    // Sad & Angry
+    '😢', '😭', '🥺', '😤', '😡', '🤬', '💔', '🙏'
+];
+
 
 const Room = () => {
   const { roomId } = useParams();
