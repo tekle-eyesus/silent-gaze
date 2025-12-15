@@ -41,11 +41,12 @@ const Room = () => {
   const userVideo = useRef();
   const connectionRef = useRef();
   
-  // <--- NEW: REFS FOR SCROLLABLE WINDOWS --->
+  // Refs for scrolling
   const partnerWindowRef = useRef(null);
   const myWindowRef = useRef(null);
+  const messagesEndRef = useRef(null); // For Mobile
 
-  // Particle Logic (Kept same)
+  // Particle Logic
   const triggerFloatingParticles = useCallback((emoji) => {
       const newParticles = [];
       for (let i = 0; i < 15; i++) {
@@ -64,7 +65,7 @@ const Room = () => {
       }, 4000);
   }, []);
 
-  // Socket Logic (Kept same)
+  // Socket Logic
   useEffect(() => {
     if (!socket.connected) socket.connect();
     socket.emit('join_room', roomId);
@@ -81,7 +82,7 @@ const Room = () => {
     return () => socket.off('receive_message');
   }, [roomId, myUserId, triggerFloatingParticles]);
 
-  // Standard Setup (Kept same)
+  // Standard Setup
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
     window.addEventListener('resize', handleResize);
@@ -89,7 +90,7 @@ const Room = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, [roomId]);
 
-  // WebRTC (Kept same)
+  // WebRTC
   useEffect(() => {
     navigator.mediaDevices.getUserMedia({ video: true, audio: false }).then((stream) => {
         if (myVideo.current) myVideo.current.srcObject = stream;
@@ -128,35 +129,50 @@ const Room = () => {
 
   const isMine = (msg) => msg.senderId === myUserId;
 
-  // <--- NEW: AUTO SCROLL BOTH WINDOWS --->
+  // Auto Scroll (Desktop)
   useEffect(() => {
-    if (partnerWindowRef.current) {
-        partnerWindowRef.current.scrollTop = partnerWindowRef.current.scrollHeight;
-    }
-    if (myWindowRef.current) {
-        myWindowRef.current.scrollTop = myWindowRef.current.scrollHeight;
-    }
+    if (partnerWindowRef.current) partnerWindowRef.current.scrollTop = partnerWindowRef.current.scrollHeight;
+    if (myWindowRef.current) myWindowRef.current.scrollTop = myWindowRef.current.scrollHeight;
   }, [messages]);
 
-  const renderMessage = (msg) => {
+  // Auto Scroll (Mobile)
+  useEffect(() => {
+    if(isMobile) messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, isMobile]);
+
+
+  const renderMessage = (msg, isDesktopContext = false) => {
+      // 1. EMOJI RENDERER
       if (msg.type === 'emoji') {
           return (
              <motion.div 
                 initial={{ scale: 0, rotate: -45 }} animate={{ scale: 1, rotate: 0 }}
                 transition={{ type: "spring", stiffness: 200 }}
-                className="text-5xl drop-shadow-lg filter my-2 block"
+                className={`text-5xl drop-shadow-lg filter my-2 ${isDesktopContext ? 'block' : 'inline-block'}`}
              >
                  {msg.text}
              </motion.div>
           );
       }
+
+      // 2. DESKTOP TEXT (In Glass Panel)
+      if (isDesktopContext) {
+        return (
+            <div className={`px-4 py-2 text-sm shadow-md max-w-full break-words mb-2 ${!isMine(msg) ? 'bg-white/10 border border-white/10 rounded-r-xl rounded-tl-xl text-white' : 'text-white/90 text-right bg-white/5 border border-white/5 rounded-l-xl rounded-tr-xl'}`}>
+                {msg.text}
+            </div>
+        );
+      }
+
+      // 3. MOBILE TEXT (Floating Bubbles)
       return (
-        <div className={`px-4 py-2 text-sm shadow-md max-w-full break-words mb-2 ${!isMine(msg) ? 'bg-white/10 border border-white/10 rounded-r-xl rounded-tl-xl text-white' : 'text-white/90 text-right bg-white/5 border border-white/5 rounded-l-xl rounded-tr-xl'}`}>
+        <div className={`px-5 py-3 text-base shadow-lg max-w-[85%] mb-2 ${!isMine(msg) ? 'glass-bubble bg-white/10 backdrop-blur-md border border-white/10 rounded-r-2xl rounded-tl-2xl text-white' : 'text-white/80 text-right bg-black/40 rounded-lg backdrop-blur-sm'}`}>
             {msg.text}
         </div>
       );
   };
 
+  // --- RENDER ---
   return (
     <div className="h-screen w-screen relative bg-black overflow-hidden flex flex-col">
       
@@ -193,103 +209,133 @@ const Room = () => {
           <button onClick={() => { socket.disconnect(); navigate('/'); }} className="text-white/50 hover:text-red-400"><IoExitOutline size={24} /></button>
       </div>
 
-      {/* --- MAIN LAYOUT GRID --- */}
-      <div className={`relative z-10 w-full h-full pointer-events-none p-4 pt-16 ${isMobile ? 'flex flex-col gap-4' : 'grid grid-cols-2 gap-8'}`}>
+      {/* --- CONDITIONAL UI RENDERING --- */}
+      
+      {/* ================= MOBILE VIEW (Floating Bubbles) ================= */}
+      {isMobile ? (
+         <div className="relative z-10 w-full h-full pointer-events-none p-4 pt-16 flex flex-col">
+             {/* Left: Partner */}
+            <div className="flex flex-col justify-end items-start space-y-4 flex-1 mb-20">
+                <AnimatePresence>
+                {messages.filter(m => !isMine(m)).slice(-5).map((msg, i) => (
+                    <motion.div initial={{ opacity: 0, x: -20, filter: 'blur(10px)' }} animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }} key={i}>
+                        {renderMessage(msg, false)}
+                    </motion.div>
+                ))}
+                </AnimatePresence>
+            </div>
+
+            {/* Right: Me + Input */}
+            <div className="flex flex-col justify-end items-end space-y-4 absolute bottom-4 left-0 w-full px-4">
+                <div className="flex flex-col space-y-2 items-end opacity-70 w-full pointer-events-none">
+                    {messages.filter(m => isMine(m)).slice(-3).map((msg, i) => (
+                        <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} key={i}>
+                            {renderMessage(msg, false)}
+                        </motion.div>
+                    ))}
+                </div>
+                <div ref={messagesEndRef} />
+                
+                {/* Input Bar */}
+                <div className="pointer-events-auto w-full max-w-sm relative flex items-center gap-2">
+                    <AnimatePresence>
+                        {showEmojiPicker && (
+                            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }} className="absolute bottom-16 left-0 bg-black/80 backdrop-blur-xl border border-white/20 rounded-2xl p-4 shadow-2xl z-50 w-full">
+                                <div className="grid grid-cols-6 gap-2 max-h-60 overflow-y-auto custom-scrollbar">
+                                    {EMOJI_LIST.map((emoji) => (
+                                        <button key={emoji} onClick={() => sendMessage(emoji, 'emoji')} className="text-2xl p-2">{emoji}</button>
+                                    ))}
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                    <button onClick={() => setShowEmojiPicker(!showEmojiPicker)} className={`p-3 rounded-full ${showEmojiPicker ? 'bg-white text-black' : 'bg-black/50 text-white'}`}><MdEmojiEmotions size={22} /></button>
+                    <div className="relative flex-1">
+                        <input type="text" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && sendMessage(input, 'text')} placeholder="Whisper..." className="w-full bg-black/50 backdrop-blur-xl border border-white/20 text-white px-5 py-3 rounded-full outline-none" />
+                        <button onClick={() => sendMessage(input, 'text')} className="absolute right-2 top-1.5 p-2 text-white"><IoSend size={16} /></button>
+                    </div>
+                </div>
+            </div>
+
+            {/* Mobile Self Video */}
+            <div className="absolute top-16 right-4 w-24 h-32 rounded-lg overflow-hidden border border-white/20 shadow-xl bg-black/50 backdrop-blur-sm z-20 pointer-events-auto">
+                 <video ref={myVideo} autoPlay playsInline muted className="w-full h-full object-cover transform scale-x-[-1]" />
+             </div>
+         </div>
+      ) : (
+      
+      /* ================= DESKTOP VIEW (Glass HUDs) ================= */
+      <div className="relative z-10 w-full h-full pointer-events-none p-8 pt-20 grid grid-cols-2 gap-8">
         
         {/* --- LEFT: PARTNER WINDOW --- */}
-        <div className="flex flex-col justify-end h-full">
-            {/* The Glass Container */}
+        <div className="flex flex-col justify-end items-start h-full">
             <div 
                 ref={partnerWindowRef}
-                className={`glass-panel w-full flex flex-col items-start space-y-2 p-4 transition-all ${isMobile ? 'h-[40vh]' : 'h-[60vh]'}`}
+                className="glass-panel w-80 h-96 flex flex-col items-start space-y-2 p-4 transition-all"
             >
-                {/* Title Label */}
                 <div className="text-xs text-white/30 tracking-widest mb-2 uppercase sticky top-0">Partner Stream</div>
-                
                 <AnimatePresence>
                     {messages.filter(m => !isMine(m)).map((msg, i) => (
-                        <motion.div 
-                            initial={{ opacity: 0, x: -10 }} 
-                            animate={{ opacity: 1, x: 0 }} 
-                            key={i}
-                            className="w-full flex justify-start"
-                        >
-                            {renderMessage(msg)}
+                        <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} key={i} className="w-full flex justify-start">
+                            {renderMessage(msg, true)}
                         </motion.div>
                     ))}
                 </AnimatePresence>
-                {/* Empty State hint */}
-                {messages.filter(m => !isMine(m)).length === 0 && (
-                    <div className="text-white/20 text-sm italic mt-10 w-full text-center">Silence...</div>
-                )}
             </div>
         </div>
 
-        {/* --- RIGHT: MY WINDOW & INPUT --- */}
-        <div className="flex flex-col justify-end h-full relative">
+        {/* --- RIGHT: MY WINDOW & INPUT & VIDEO --- */}
+        <div className="flex flex-col justify-end items-end h-full">
             
-            {/* My Messages Container */}
+            {/* My Window */}
             <div 
                 ref={myWindowRef}
-                className={`glass-panel w-full flex flex-col items-end space-y-2 p-4 mb-4 transition-all ${isMobile ? 'h-[25vh]' : 'h-[50vh]'}`}
+                className="glass-panel w-80 h-96 flex flex-col items-end space-y-2 p-4 mb-4 transition-all"
             >
                  <div className="text-xs text-white/30 tracking-widest mb-2 uppercase sticky top-0 w-full text-right">My Stream</div>
-
                  <AnimatePresence>
                     {messages.filter(m => isMine(m)).map((msg, i) => (
-                        <motion.div 
-                            initial={{ opacity: 0, x: 10 }} 
-                            animate={{ opacity: 1, x: 0 }} 
-                            key={i}
-                            className="w-full flex justify-end"
-                        >
-                            {renderMessage(msg)}
+                        <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} key={i} className="w-full flex justify-end">
+                            {renderMessage(msg, true)}
                         </motion.div>
                     ))}
                  </AnimatePresence>
             </div>
             
-            {/* Input Area */}
-            <div className="pointer-events-auto w-full max-w-full relative flex items-center gap-2">
-                <AnimatePresence>
-                {showEmojiPicker && (
-                    <motion.div 
-                        initial={{ opacity: 0, y: 10, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                        className="absolute bottom-16 left-0 bg-black/80 backdrop-blur-xl border border-white/20 rounded-2xl p-4 shadow-2xl z-50 w-full"
-                    >
-                        <div className="grid grid-cols-6 gap-2 max-h-60 overflow-y-auto custom-scrollbar">
-                            {EMOJI_LIST.map((emoji) => (
-                                <button key={emoji} onClick={() => sendMessage(emoji, 'emoji')} className="text-2xl hover:scale-110 transition-transform p-2">{emoji}</button>
-                            ))}
-                        </div>
-                    </motion.div>
-                )}
-                </AnimatePresence>
-
-                <button onClick={() => setShowEmojiPicker(!showEmojiPicker)} className={`p-3 rounded-full transition-colors ${showEmojiPicker ? 'bg-white text-black' : 'glass-panel text-white hover:bg-white/20'}`}>
-                    <MdEmojiEmotions size={22} />
-                </button>
-
-                <div className="relative flex-1">
-                    <input type="text" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && sendMessage(input, 'text')} placeholder="Transmit..." className="w-full glass-panel border border-white/20 text-white px-5 py-3 rounded-full outline-none focus:border-white/50 transition-all pr-12" />
-                    <button onClick={() => sendMessage(input, 'text')} className="absolute right-2 top-1.5 p-2 hover:bg-white/10 rounded-full text-white"><IoSend size={16} /></button>
+            {/* Input + Video Container */}
+            <div className="w-80 flex flex-col items-end gap-4 pointer-events-auto">
+                
+                {/* Input Area */}
+                <div className="w-full relative flex items-center gap-2">
+                    <AnimatePresence>
+                    {showEmojiPicker && (
+                        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="absolute bottom-16 left-0 bg-black/80 backdrop-blur-xl border border-white/20 rounded-2xl p-4 shadow-2xl z-50 w-full">
+                            <div className="grid grid-cols-6 gap-2 max-h-60 overflow-y-auto custom-scrollbar">
+                                {EMOJI_LIST.map((emoji) => (
+                                    <button key={emoji} onClick={() => sendMessage(emoji, 'emoji')} className="text-2xl hover:scale-110 p-2">{emoji}</button>
+                                ))}
+                            </div>
+                        </motion.div>
+                    )}
+                    </AnimatePresence>
+                    <button onClick={() => setShowEmojiPicker(!showEmojiPicker)} className={`p-3 rounded-full transition-colors ${showEmojiPicker ? 'bg-white text-black' : 'glass-panel text-white hover:bg-white/20'}`}><MdEmojiEmotions size={22} /></button>
+                    <div className="relative flex-1">
+                        <input type="text" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && sendMessage(input, 'text')} placeholder="Transmit..." className="w-full glass-panel border border-white/20 text-white px-5 py-3 rounded-full outline-none focus:border-white/50 transition-all pr-12" />
+                        <button onClick={() => sendMessage(input, 'text')} className="absolute right-2 top-1.5 p-2 hover:bg-white/10 rounded-full text-white"><IoSend size={16} /></button>
+                    </div>
                 </div>
-            </div>
 
-            {/* My Video (Desktop Only) */}
-            {!isMobile && (
-                <div className="absolute -right-6 top-0 w-40 h-28 rounded-xl overflow-hidden border border-white/20 shadow-2xl bg-black/50 backdrop-blur-sm pointer-events-auto opacity-70 hover:opacity-100 transition-opacity">
+                {/* Desktop Self Video (Fixed Margin) */}
+                <div className="w-40 h-28 rounded-xl overflow-hidden border border-white/20 shadow-2xl bg-black/50 backdrop-blur-sm pointer-events-auto opacity-80 hover:opacity-100 transition-opacity">
                     <video ref={myVideo} autoPlay playsInline muted className="w-full h-full object-cover transform scale-x-[-1]" />
                 </div>
-            )}
-        </div>
-      </div>
 
-      {isMobile && (
-         <div className="absolute top-16 right-4 w-20 h-28 rounded-lg overflow-hidden border border-white/20 shadow-xl bg-black/50 backdrop-blur-sm z-20 pointer-events-auto">
-             <video ref={myVideo} autoPlay playsInline muted className="w-full h-full object-cover transform scale-x-[-1]" />
-         </div>
+            </div>
+        </div>
+
+      </div>
       )}
+
     </div>
   );
 };
