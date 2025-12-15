@@ -44,7 +44,7 @@ const Room = () => {
   // Refs for scrolling
   const partnerWindowRef = useRef(null);
   const myWindowRef = useRef(null);
-  const messagesEndRef = useRef(null); // For Mobile
+  const messagesEndRef = useRef(null); 
 
   // Particle Logic
   const triggerFloatingParticles = useCallback((emoji) => {
@@ -129,17 +129,12 @@ const Room = () => {
 
   const isMine = (msg) => msg.senderId === myUserId;
 
-  // Auto Scroll (Desktop)
+  // Auto Scroll
   useEffect(() => {
     if (partnerWindowRef.current) partnerWindowRef.current.scrollTop = partnerWindowRef.current.scrollHeight;
     if (myWindowRef.current) myWindowRef.current.scrollTop = myWindowRef.current.scrollHeight;
-  }, [messages]);
-
-  // Auto Scroll (Mobile)
-  useEffect(() => {
-    if(isMobile) messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (isMobile) messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isMobile]);
-
 
   const renderMessage = (msg, isDesktopContext = false) => {
       // 1. EMOJI RENDERER
@@ -155,7 +150,7 @@ const Room = () => {
           );
       }
 
-      // 2. DESKTOP TEXT (In Glass Panel)
+      // 2. DESKTOP TEXT (Glass Panel)
       if (isDesktopContext) {
         return (
             <div className={`px-4 py-2 text-sm shadow-md max-w-full break-words mb-2 ${!isMine(msg) ? 'bg-white/10 border border-white/10 rounded-r-xl rounded-tl-xl text-white' : 'text-white/90 text-right bg-white/5 border border-white/5 rounded-l-xl rounded-tr-xl'}`}>
@@ -166,13 +161,12 @@ const Room = () => {
 
       // 3. MOBILE TEXT (Floating Bubbles)
       return (
-        <div className={`px-5 py-3 text-base shadow-lg max-w-[85%] mb-2 ${!isMine(msg) ? 'glass-bubble bg-white/10 backdrop-blur-md border border-white/10 rounded-r-2xl rounded-tl-2xl text-white' : 'text-white/80 text-right bg-black/40 rounded-lg backdrop-blur-sm'}`}>
+        <div className={`px-5 py-3 text-base shadow-lg max-w-[85%] break-words ${!isMine(msg) ? 'glass-bubble bg-white/10 backdrop-blur-md border border-white/10 rounded-r-2xl rounded-tl-2xl text-white' : 'text-white/80 text-right bg-black/50 border border-white/5 rounded-l-2xl rounded-tr-2xl backdrop-blur-sm'}`}>
             {msg.text}
         </div>
       );
   };
 
-  // --- RENDER ---
   return (
     <div className="h-screen w-screen relative bg-black overflow-hidden flex flex-col">
       
@@ -211,33 +205,28 @@ const Room = () => {
 
       {/* --- CONDITIONAL UI RENDERING --- */}
       
-      {/* ================= MOBILE VIEW (Floating Bubbles) ================= */}
+      {/* ================= MOBILE VIEW (Single Stream Chat) ================= */}
       {isMobile ? (
-         <div className="relative z-10 w-full h-full pointer-events-none p-4 pt-16 flex flex-col">
-             {/* Left: Partner */}
-            <div className="flex flex-col justify-end items-start space-y-4 flex-1 mb-20">
-                <AnimatePresence>
-                {messages.filter(m => !isMine(m)).slice(-5).map((msg, i) => (
-                    <motion.div initial={{ opacity: 0, x: -20, filter: 'blur(10px)' }} animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }} key={i}>
+         <div className="relative z-10 w-full h-full flex flex-col pt-16 pb-2 pointer-events-none">
+             
+             {/* 1. UNIFIED CHAT STREAM (Scrollable) */}
+            <div className="flex-1 overflow-y-auto px-4 flex flex-col space-y-3 custom-scrollbar">
+                {messages.map((msg, i) => (
+                    <motion.div 
+                        key={i}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className={`w-full flex ${isMine(msg) ? 'justify-end' : 'justify-start'}`}
+                    >
                         {renderMessage(msg, false)}
                     </motion.div>
                 ))}
-                </AnimatePresence>
+                <div ref={messagesEndRef} />
             </div>
 
-            {/* Right: Me + Input */}
-            <div className="flex flex-col justify-end items-end space-y-4 absolute bottom-4 left-0 w-full px-4">
-                <div className="flex flex-col space-y-2 items-end opacity-70 w-full pointer-events-none">
-                    {messages.filter(m => isMine(m)).slice(-3).map((msg, i) => (
-                        <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} key={i}>
-                            {renderMessage(msg, false)}
-                        </motion.div>
-                    ))}
-                </div>
-                <div ref={messagesEndRef} />
-                
-                {/* Input Bar */}
-                <div className="pointer-events-auto w-full max-w-sm relative flex items-center gap-2">
+            {/* 2. INPUT AREA (Fixed at bottom) */}
+            <div className="w-full px-4 pt-2 pointer-events-auto shrink-0">
+                <div className="w-full relative flex items-center gap-2">
                     <AnimatePresence>
                         {showEmojiPicker && (
                             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }} className="absolute bottom-16 left-0 bg-black/80 backdrop-blur-xl border border-white/20 rounded-2xl p-4 shadow-2xl z-50 w-full">
@@ -257,7 +246,7 @@ const Room = () => {
                 </div>
             </div>
 
-            {/* Mobile Self Video */}
+            {/* 3. MOBILE SELF VIDEO (Absolute Top Right) */}
             <div className="absolute top-16 right-4 w-24 h-32 rounded-lg overflow-hidden border border-white/20 shadow-xl bg-black/50 backdrop-blur-sm z-20 pointer-events-auto">
                  <video ref={myVideo} autoPlay playsInline muted className="w-full h-full object-cover transform scale-x-[-1]" />
              </div>
@@ -267,7 +256,7 @@ const Room = () => {
       /* ================= DESKTOP VIEW (Glass HUDs) ================= */
       <div className="relative z-10 w-full h-full pointer-events-none p-8 pt-20 grid grid-cols-2 gap-8">
         
-        {/* --- LEFT: PARTNER WINDOW --- */}
+        {/* LEFT: PARTNER WINDOW */}
         <div className="flex flex-col justify-end items-start h-full">
             <div 
                 ref={partnerWindowRef}
@@ -284,10 +273,8 @@ const Room = () => {
             </div>
         </div>
 
-        {/* --- RIGHT: MY WINDOW & INPUT & VIDEO --- */}
+        {/* RIGHT: MY WINDOW & INPUT */}
         <div className="flex flex-col justify-end items-end h-full">
-            
-            {/* My Window */}
             <div 
                 ref={myWindowRef}
                 className="glass-panel w-80 h-96 flex flex-col items-end space-y-2 p-4 mb-4 transition-all"
@@ -302,10 +289,7 @@ const Room = () => {
                  </AnimatePresence>
             </div>
             
-            {/* Input + Video Container */}
             <div className="w-80 flex flex-col items-end gap-4 pointer-events-auto">
-                
-                {/* Input Area */}
                 <div className="w-full relative flex items-center gap-2">
                     <AnimatePresence>
                     {showEmojiPicker && (
@@ -325,11 +309,9 @@ const Room = () => {
                     </div>
                 </div>
 
-                {/* Desktop Self Video (Fixed Margin) */}
                 <div className="w-40 h-28 rounded-xl overflow-hidden border border-white/20 shadow-2xl bg-black/50 backdrop-blur-sm pointer-events-auto opacity-80 hover:opacity-100 transition-opacity">
                     <video ref={myVideo} autoPlay playsInline muted className="w-full h-full object-cover transform scale-x-[-1]" />
                 </div>
-
             </div>
         </div>
 
