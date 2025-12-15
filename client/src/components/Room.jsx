@@ -137,7 +137,7 @@ const Room = () => {
   }, [messages, isMobile]);
 
   const renderMessage = (msg, isDesktopContext = false) => {
-      // 1. EMOJI RENDERER
+      // EMOJI RENDERER
       if (msg.type === 'emoji') {
           return (
              <motion.div 
@@ -150,7 +150,7 @@ const Room = () => {
           );
       }
 
-      // 2. DESKTOP TEXT (Glass Panel)
+      //  DESKTOP TEXT (Glass Panel)
       if (isDesktopContext) {
         return (
             <div className={`px-4 py-2 text-sm shadow-md max-w-full break-words mb-2 ${!isMine(msg) ? 'bg-white/10 border border-white/10 rounded-r-xl rounded-tl-xl text-white' : 'text-white/90 text-right bg-white/5 border border-white/5 rounded-l-xl rounded-tr-xl'}`}>
@@ -159,7 +159,7 @@ const Room = () => {
         );
       }
 
-      // 3. MOBILE TEXT (Floating Bubbles)
+      //  MOBILE TEXT (Floating Bubbles)
       return (
         <div className={`px-5 py-3 text-base shadow-lg max-w-[85%] break-words ${!isMine(msg) ? 'glass-bubble bg-white/10 backdrop-blur-md border border-white/10 rounded-r-2xl rounded-tl-2xl text-white' : 'text-white/80 text-right bg-black/50 border border-white/5 rounded-l-2xl rounded-tr-2xl backdrop-blur-sm'}`}>
             {msg.text}
@@ -203,14 +203,9 @@ const Room = () => {
           <button onClick={() => { socket.disconnect(); navigate('/'); }} className="text-white/50 hover:text-red-400"><IoExitOutline size={24} /></button>
       </div>
 
-      {/* --- CONDITIONAL UI RENDERING --- */}
-      
-      {/* ================= MOBILE VIEW (Single Stream Chat) ================= */}
       {isMobile ? (
          <div className="relative z-10 w-full h-full flex flex-col pt-16 pb-2 pointer-events-none">
-             
-             {/* 1. UNIFIED CHAT STREAM (Scrollable) */}
-            <div className="flex-1 overflow-y-auto px-4 flex flex-col space-y-3 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto px-4 flex flex-col space-y-3 custom-scrollbar pointer-events-auto">
                 {messages.map((msg, i) => (
                     <motion.div 
                         key={i}
@@ -224,7 +219,6 @@ const Room = () => {
                 <div ref={messagesEndRef} />
             </div>
 
-            {/* 2. INPUT AREA (Fixed at bottom) */}
             <div className="w-full px-4 pt-2 pointer-events-auto shrink-0">
                 <div className="w-full relative flex items-center gap-2">
                     <AnimatePresence>
@@ -246,14 +240,12 @@ const Room = () => {
                 </div>
             </div>
 
-            {/* 3. MOBILE SELF VIDEO (Absolute Top Right) */}
             <div className="absolute top-16 right-4 w-24 h-32 rounded-lg overflow-hidden border border-white/20 shadow-xl bg-black/50 backdrop-blur-sm z-20 pointer-events-auto">
                  <video ref={myVideo} autoPlay playsInline muted className="w-full h-full object-cover transform scale-x-[-1]" />
              </div>
          </div>
       ) : (
       
-      /* ================= DESKTOP VIEW (Glass HUDs) ================= */
       <div className="relative z-10 w-full h-full pointer-events-none p-8 pt-20 grid grid-cols-2 gap-8">
         
         {/* LEFT: PARTNER WINDOW */}
