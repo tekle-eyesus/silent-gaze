@@ -46,6 +46,13 @@ const Room = () => {
   const myWindowRef = useRef(null);
   const messagesEndRef = useRef(null); 
 
+  // --- HELPER: FORMAT TIME ---
+  const formatTime = (dateString) => {
+      if (!dateString) return "";
+      const date = new Date(dateString);
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
   // Particle Logic
   const triggerFloatingParticles = useCallback((emoji) => {
       const newParticles = [];
@@ -137,32 +144,44 @@ const Room = () => {
   }, [messages, isMobile]);
 
   const renderMessage = (msg, isDesktopContext = false) => {
-      // EMOJI RENDERER
+      // 1. EMOJI RENDERER
       if (msg.type === 'emoji') {
           return (
-             <motion.div 
-                initial={{ scale: 0, rotate: -45 }} animate={{ scale: 1, rotate: 0 }}
-                transition={{ type: "spring", stiffness: 200 }}
-                className={`text-5xl drop-shadow-lg filter my-2 ${isDesktopContext ? 'block' : 'inline-block'}`}
-             >
-                 {msg.text}
-             </motion.div>
+             <div className={`flex flex-col ${isMine(msg) ? 'items-end' : 'items-start'}`}>
+                 <motion.div 
+                    initial={{ scale: 0, rotate: -45 }} animate={{ scale: 1, rotate: 0 }}
+                    transition={{ type: "spring", stiffness: 200 }}
+                    className={`text-5xl drop-shadow-lg filter my-1 ${isDesktopContext ? 'block' : 'inline-block'}`}
+                 >
+                     {msg.text}
+                 </motion.div>
+                 {/* Timestamp for Emoji */}
+                 <span className="text-[10px] text-white/40 px-1">
+                    {formatTime(msg.createdAt)}
+                 </span>
+             </div>
           );
       }
 
-      //  DESKTOP TEXT (Glass Panel)
+      // 2. DESKTOP TEXT (Glass Panel)
       if (isDesktopContext) {
         return (
-            <div className={`px-4 py-2 text-sm shadow-md max-w-full break-words mb-2 ${!isMine(msg) ? 'bg-white/10 border border-white/10 rounded-r-xl rounded-tl-xl text-white' : 'text-white/90 text-right bg-white/5 border border-white/5 rounded-l-xl rounded-tr-xl'}`}>
-                {msg.text}
+            <div className={`px-4 py-2 text-sm shadow-md max-w-full break-words mb-2 flex flex-col ${!isMine(msg) ? 'bg-white/10 border border-white/10 rounded-r-xl rounded-tl-xl text-white' : 'text-white/90 items-end bg-white/5 border border-white/5 rounded-l-xl rounded-tr-xl'}`}>
+                <span>{msg.text}</span>
+                <span className={`text-[9px] mt-1 ${!isMine(msg) ? 'text-white/40' : 'text-white/30'}`}>
+                    {formatTime(msg.createdAt)}
+                </span>
             </div>
         );
       }
 
-      //  MOBILE TEXT (Floating Bubbles)
+      // 3. MOBILE TEXT (Floating Bubbles)
       return (
-        <div className={`px-5 py-3 text-base shadow-lg max-w-[85%] break-words ${!isMine(msg) ? 'glass-bubble bg-white/10 backdrop-blur-md border border-white/10 rounded-r-2xl rounded-tl-2xl text-white' : 'text-white/80 text-right bg-black/50 border border-white/5 rounded-l-2xl rounded-tr-2xl backdrop-blur-sm'}`}>
-            {msg.text}
+        <div className={`px-4 py-2 text-base shadow-lg max-w-[85%] break-words flex flex-col ${!isMine(msg) ? 'glass-bubble bg-white/10 backdrop-blur-md border border-white/10 rounded-r-2xl rounded-tl-2xl text-white' : 'text-white/80 items-end bg-black/50 border border-white/5 rounded-l-2xl rounded-tr-2xl backdrop-blur-sm'}`}>
+            <span>{msg.text}</span>
+            <span className={`text-[10px] mt-1 ${!isMine(msg) ? 'text-white/40' : 'text-white/30'}`}>
+                {formatTime(msg.createdAt)}
+            </span>
         </div>
       );
   };
@@ -202,7 +221,8 @@ const Room = () => {
           <div className="text-white/50 text-xs tracking-widest">ROOM: <span className="text-white font-mono">{roomId}</span></div>
           <button onClick={() => { socket.disconnect(); navigate('/'); }} className="text-white/50 hover:text-red-400"><IoExitOutline size={24} /></button>
       </div>
-
+      
+      {/* ================= MOBILE VIEW ================= */}
       {isMobile ? (
          <div className="relative z-10 w-full h-full flex flex-col pt-16 pb-2 pointer-events-none">
             <div className="flex-1 overflow-y-auto px-4 flex flex-col space-y-3 custom-scrollbar pointer-events-auto">
@@ -246,6 +266,7 @@ const Room = () => {
          </div>
       ) : (
       
+      /* ================= DESKTOP VIEW ================= */
       <div className="relative z-10 w-full h-full pointer-events-none p-8 pt-20 grid grid-cols-2 gap-8">
         
         {/* LEFT: PARTNER WINDOW */}
