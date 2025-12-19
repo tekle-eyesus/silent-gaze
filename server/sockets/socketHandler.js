@@ -20,6 +20,14 @@ module.exports = (io) => {
             }
         });
 
+        socket.on('typing_start', (roomId) => {
+            socket.to(roomId).emit('display_typing', socket.id);
+        });
+
+        socket.on('typing_stop', (roomId) => {
+            socket.to(roomId).emit('hide_typing', socket.id);
+        });
+
         // WebRTC Signaling
         socket.on('offer', (payload) => io.to(payload.target).emit('offer', payload));
         socket.on('answer', (payload) => io.to(payload.target).emit('answer', payload));
