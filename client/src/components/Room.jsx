@@ -7,7 +7,7 @@ import { IoSend, IoExitOutline } from 'react-icons/io5';
 import { MdEmojiEmotions } from 'react-icons/md'; 
 import { getMessages } from '../api';
 
-const socket = io("http://localhost:3001", { autoConnect: false });
+const socket = io.connect(import.meta.env.VITE_SERVER_URL || "http://localhost:3001", { autoConnect: false });
 
 const EMOJI_LIST = [
     '❤️', '💖', '😍', '😘', '🥰', '🔥', '✨', '🎉',
