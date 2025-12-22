@@ -84,7 +84,6 @@ const Landing = () => {
             >
               <FaTwitter aria-hidden />
               <span className="hidden sm:inline">Twitter</span>
-              <span className="sm:hidden">X</span>
             </a>
             <a
               href="https://github.com/tekle-eyesus"    target='_blank'
