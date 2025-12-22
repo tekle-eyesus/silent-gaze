@@ -2,7 +2,7 @@
 
   <img src="https://res.cloudinary.com/dewvz4zxk/image/upload/v1766405786/img1-removebg-preview_zxfcth.png" alt="Silent Glaze Logo" width="60" />
 
-  <h1>Silent Glaze</h1>
+  <h1>Silent Gaze</h1>
   
   <p>
     <b>A Video Connection Platform</b>
@@ -44,7 +44,7 @@
 
 ## About The Project
 
-**Silent Glaze** is a conceptual video meeting application designed for "Silent Connection." Unlike traditional tools like Zoom or Google Meet, this platform disables audio to focus entirely on visual presence and text-based emotion.
+**Silent Gaze** is a conceptual video meeting application designed for "Silent Connection." Unlike traditional tools like Zoom or Google Meet, this platform disables audio to focus entirely on visual presence and text-based emotion.
 
 The interface features a **futuristic Glassmorphism UI** where chat messages float over the video feed like a Heads-Up Display (HUD). It emphasizes emotional connection through animated particle emojis and a moody, cinematic atmosphere.
 
@@ -87,8 +87,8 @@ To get a local copy up and running, follow these steps.
 
 1.  **Clone the repo**
     ```sh
-    git clone https://github.com/yourusername/silent-glaze.git
-    cd silent-glaze
+    git clone https://github.com/yourusername/silent-gaze.git
+    cd silent-gaze
     ```
 
 2.  **Setup Backend**
